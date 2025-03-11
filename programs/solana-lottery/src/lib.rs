@@ -1,6 +1,8 @@
 use anchor_lang::prelude::*;
+use anchor_lang::solana_program::{system_instruction, program::invoke};
+use anchor_lang::system_program::System;
 
-declare_id!("");  
+declare_id!(""); 
 
 #[program]
 pub mod solana_lottery {
@@ -21,7 +23,23 @@ pub mod solana_lottery {
         let random_index = (Clock::get()?.slot % total_participants as u64) as usize;
         let winner = lottery.participants[random_index];
 
+        // Transfer total SOL from lottery to the winner
+        let transfer_instruction = system_instruction::transfer(
+            &ctx.accounts.lottery.to_account_info().key(),
+            &winner,
+            ctx.accounts.lottery.to_account_info().lamports(),
+        );
+        invoke(
+            &transfer_instruction,
+            &[
+                ctx.accounts.lottery.to_account_info(),
+                ctx.accounts.system_program.to_account_info(),
+            ],
+        )?;
+
         lottery.winner = Some(winner);
+        lottery.participants.clear(); // This Resets lottery for next round , hopin we can get thru this time 
+
         Ok(())
     }
 }
@@ -37,6 +55,7 @@ pub struct EnterLottery<'info> {
 pub struct PickWinner<'info> {
     #[account(mut)]
     pub lottery: Account<'info, Lottery>,
+    pub system_program: Program<'info, System>,
 }
 
 #[account]
